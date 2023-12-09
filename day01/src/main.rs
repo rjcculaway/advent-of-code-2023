@@ -87,14 +87,14 @@ mod part_two {
 
         for (i, c) in line.chars().enumerate() {
             if c.is_numeric() && (first_digit.is_none() || first_digit_index.unwrap() > i)  {
-                first_digit_index = Some(i);
+                // first_digit_index = Some(i);
                 first_digit = Some(c.to_digit(10).unwrap());
                 break;
             }
         }
         for (i, c) in line.chars().rev().enumerate() {
             if c.is_numeric() && (second_digit.is_none() || second_digit_index.unwrap() < line.len() - 1 - i)  {
-                second_digit_index = Some(i);
+                // second_digit_index = Some(i);
                 second_digit = Some(c.to_digit(10).unwrap());
                 break;
             }
