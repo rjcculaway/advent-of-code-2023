@@ -3,9 +3,14 @@
 // Rene Jotham Culaway
 //--------------------------------------------------------------------------------
 
-use std::{fmt::Display, fs, collections::{VecDeque, HashMap}};
+use std::{fmt::Display, fs, collections::{VecDeque, HashMap, HashSet}};
 
 const FILE_NAME: &'static str = "input.txt";
+
+enum GeometryState {
+    OutsideEdge,
+    WithinEdge,
+}
 
 #[derive(Debug, Clone, Copy)]
 enum Movement {
@@ -131,10 +136,6 @@ impl Map {
         };
 
         Some(Map { grid, width, height, start })
-    }
-
-    fn is_within_bounds(&self, position: (u32, u32)) -> bool {
-        return position.0 < self.width && position.1 < self.height;
     }
 
     fn apply_movement(&self, current_position: (u32, u32), movement: &Movement) -> Option<(u32, u32)> {
@@ -295,7 +296,10 @@ impl Map {
         }
     }
 
-    fn bfs_modified(&self) -> HashMap<(u32, u32), u32> {
+    /**
+     * Performs breadth first search. Gets the distance of each vertex to the source.
+     */
+    fn bfs_distance(&self) -> HashMap<(u32, u32), u32> {
 
         let possible_movements: [Movement; 4] = [Movement::UP, Movement::DOWN, Movement::LEFT, Movement::RIGHT];
 
@@ -317,16 +321,100 @@ impl Map {
         return visited_distance;
     }
 
-    fn print_bfs(&self, visited_distance: &HashMap<(u32, u32), u32>) {
+    /**
+     * Performs breadth first search. Gets the sequence of steps in the loop.
+     */
+    fn bfs_loop(&self) -> HashMap<(u32, u32), u32> {
+
+        let possible_movements: [Movement; 4] = [Movement::UP, Movement::DOWN, Movement::LEFT, Movement::RIGHT];
+
+        let mut frontier: VecDeque<(u32, u32)> = VecDeque::from([self.start.clone()]);
+        let mut visited_distance: HashMap<(u32, u32), u32> = HashMap::from([(self.start.clone(), 0_u32)]);
+
+        while !frontier.is_empty() {
+            let current: (u32, u32) = frontier.pop_front().unwrap();
+            let adjacents = possible_movements.iter().filter_map(| movement | self.moveable_or_none(current, movement));
+
+            for adjacent in adjacents {
+                if !visited_distance.contains_key(&adjacent) {
+                    frontier.push_back(adjacent);
+                    visited_distance.insert(adjacent.clone(), *visited_distance.get(&current).unwrap() + 1);
+                    break;
+                }
+            }
+        }
+        
+        return visited_distance;
+    }
+
+    fn dfs_ordered_by_traversal(&self) -> HashSet<(u32, u32)> {
+        let possible_movements: [Movement; 4] = [Movement::UP, Movement::DOWN, Movement::LEFT, Movement::RIGHT];
+
+        let mut frontier: VecDeque<(u32, u32)> = VecDeque::from([self.start.clone()]);
+        let mut visited_distance: HashSet<(u32, u32)> = HashSet::from([self.start.clone()]);
+        // let mut visited: Vec<(u32, u32)> = vec![self.start.clone()];
+
+        while !frontier.is_empty() {
+            let current: (u32, u32) = frontier.pop_front().unwrap();
+            let adjacents = possible_movements.iter().filter_map(| movement | self.moveable_or_none(current, movement));
+
+            for adjacent in adjacents {
+                if !visited_distance.contains(&adjacent) {
+                    frontier.push_front(adjacent);
+                    visited_distance.insert(adjacent.clone());
+                    // visited.push(adjacent.clone());
+                }
+            }
+        }
+        
+        return visited_distance;
+    }
+
+    fn print_bfs_by_distance(&self, visited_distance: &HashMap<(u32, u32), u32>) {
         for i in 0..self.height {
             for j in 0..self.width {
                 match visited_distance.get(&(j, i)) {
-                    None => print!("."),
-                    Some(distance) => print!("{distance}"),
+                    None => print!(".\t"),
+                    Some(distance) => print!("{distance}\t"),
                 }
             }
             println!("");
         }
+    }
+
+    // To get the area, we use the Shoelace formula: https://en.wikipedia.org/wiki/Pick%27s_theorem
+    fn shoelace(mut vertices: Vec<(u32, u32)>) -> i64 {
+        let mut area: i64 = 0;
+
+        vertices.push(vertices.get(0).unwrap().clone());
+        println!("{:?}", vertices);
+        for pair in vertices.windows(2) {
+            match pair {
+                [left, right] => {
+                    area += (right.0 as i64 - left.0 as i64) * (right.1 as i64 + left.1 as i64)
+                },
+                _ => {}
+            }
+        }
+        println!("2*area: {area}");
+        return i64::abs(area / 2);
+    }
+
+    // Pick's theorem, rearranged formula to get the interior points
+    fn picks_theorem_interior(area: i64, num_of_vertices: i64) -> i64 {
+        let interior = area - (num_of_vertices / 2) + 1;
+        return interior;
+    }
+    
+    fn get_interior_area(&self) -> i64 {
+        let vertices_step = self.bfs_loop();
+        let mut vertices = Vec::from_iter(vertices_step.keys().map(|position| position.clone()));
+        vertices.sort_by(|a, b| u32::cmp(vertices_step.get(a).unwrap(), vertices_step.get(b).unwrap()));
+        let num_of_vertices = vertices.len();
+        let total_area = Map::shoelace(vertices);
+        let interior = Map::picks_theorem_interior(total_area, num_of_vertices as i64);
+
+        return interior;
     }
 
 }
@@ -335,9 +423,11 @@ fn main() {
     let Some(map) = Map::load_from_file(FILE_NAME) else {
         return;
     };
-    let distances = map.bfs_modified();
+    let distances = map.bfs_distance();
     println!("{:#?}", distances.values().max());
-    // map.print_bfs(&distances);
+    println!("{:?}", map.dfs_ordered_by_traversal());
+    let area = map.get_interior_area();
+    println!("Area: {:#?}", area);
 }
 
 #[cfg(test)]
@@ -351,8 +441,8 @@ mod test {
         let Some(map) = Map::load_from_file("test_input.txt") else {
             panic!();
         };
-        let distances = map.bfs_modified();
-        map.print_bfs(&distances);
+        let distances = map.bfs_distance();
+        map.print_bfs_by_distance(&distances);
         assert_eq!(*distances.values().max().unwrap(), 4);
     }
 
@@ -361,8 +451,28 @@ mod test {
         let Some(map) = Map::load_from_file("test_input2.txt") else {
             panic!();
         };
-        let distances = map.bfs_modified();
-        map.print_bfs(&distances);
-        assert_eq!(*map.bfs_modified().values().max().unwrap(), 8);
+        let distances = map.bfs_distance();
+        map.print_bfs_by_distance(&distances);
+        assert_eq!(*map.bfs_distance().values().max().unwrap(), 8);
+    }
+
+    #[test]
+    fn test_area() {
+        let Some(map) = Map::load_from_file("test_input3.txt") else {
+            panic!();
+        };
+        let distances = map.bfs_loop();
+        map.print_bfs_by_distance(&distances);
+        assert_eq!(map.get_interior_area(), 4);
+    }
+
+    #[test]
+    fn test_area2() {
+        let Some(map) = Map::load_from_file("test_input.txt") else {
+            panic!();
+        };
+        let distances = map.bfs_loop();
+        map.print_bfs_by_distance(&distances);
+        assert_eq!(map.get_interior_area(), 1);
     }
 }
