@@ -7,11 +7,6 @@ use std::{fmt::Display, fs, collections::{VecDeque, HashMap, HashSet}};
 
 const FILE_NAME: &'static str = "input.txt";
 
-enum GeometryState {
-    OutsideEdge,
-    WithinEdge,
-}
-
 #[derive(Debug, Clone, Copy)]
 enum Movement {
     UP,
@@ -370,17 +365,17 @@ impl Map {
         return visited_distance;
     }
 
-    fn print_bfs_by_distance(&self, visited_distance: &HashMap<(u32, u32), u32>) {
-        for i in 0..self.height {
-            for j in 0..self.width {
-                match visited_distance.get(&(j, i)) {
-                    None => print!(".\t"),
-                    Some(distance) => print!("{distance}\t"),
-                }
-            }
-            println!("");
-        }
-    }
+    // fn print_bfs_by_distance(&self, visited_distance: &HashMap<(u32, u32), u32>) {
+    //     for i in 0..self.height {
+    //         for j in 0..self.width {
+    //             match visited_distance.get(&(j, i)) {
+    //                 None => print!(".\t"),
+    //                 Some(distance) => print!("{distance}\t"),
+    //             }
+    //         }
+    //         println!("");
+    //     }
+    // }
 
     // To get the area, we use the Shoelace formula: https://en.wikipedia.org/wiki/Pick%27s_theorem
     fn shoelace(mut vertices: Vec<(u32, u32)>) -> i64 {
@@ -442,7 +437,7 @@ mod test {
             panic!();
         };
         let distances = map.bfs_distance();
-        map.print_bfs_by_distance(&distances);
+        // map.print_bfs_by_distance(&distances);
         assert_eq!(*distances.values().max().unwrap(), 4);
     }
 
@@ -451,8 +446,8 @@ mod test {
         let Some(map) = Map::load_from_file("test_input2.txt") else {
             panic!();
         };
-        let distances = map.bfs_distance();
-        map.print_bfs_by_distance(&distances);
+        // let distances = map.bfs_distance();
+        // map.print_bfs_by_distance(&distances);
         assert_eq!(*map.bfs_distance().values().max().unwrap(), 8);
     }
 
@@ -461,8 +456,8 @@ mod test {
         let Some(map) = Map::load_from_file("test_input3.txt") else {
             panic!();
         };
-        let distances = map.bfs_loop();
-        map.print_bfs_by_distance(&distances);
+        // let distances = map.bfs_loop();
+        // map.print_bfs_by_distance(&distances);
         assert_eq!(map.get_interior_area(), 4);
     }
 
@@ -471,8 +466,8 @@ mod test {
         let Some(map) = Map::load_from_file("test_input.txt") else {
             panic!();
         };
-        let distances = map.bfs_loop();
-        map.print_bfs_by_distance(&distances);
+        // let distances = map.bfs_loop();
+        // map.print_bfs_by_distance(&distances);
         assert_eq!(map.get_interior_area(), 1);
     }
 }
