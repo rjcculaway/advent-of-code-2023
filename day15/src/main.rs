@@ -93,12 +93,12 @@ impl Facility {
             .unwrap_or(0)
     }
 
-    pub fn accumulate_hash(&self) -> i32 {
-        return self.sequence
-                .iter()
-                .map(|step| Facility::hash(step))
-                .sum()
-    }
+    // pub fn accumulate_hash(&self) -> i32 {
+    //     return self.sequence
+    //             .iter()
+    //             .map(|step| Facility::hash(step))
+    //             .sum()
+    // }
 }
 
 fn main() {
