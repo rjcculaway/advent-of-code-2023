@@ -3,7 +3,7 @@
 // Rene Jotham Culaway
 //--------------------------------------------------------------------------------
 
-use std::collections::{HashMap, BTreeSet};
+use std::{collections::{HashMap, BTreeSet}, vec};
 
 const FILE_NAME: &'static str = "test_input.txt";
 
@@ -75,7 +75,7 @@ impl City {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
     North,
     South,
@@ -137,6 +137,7 @@ impl Agent {
     }
 
     pub fn get_next_adjacent(&self, position: &Position) -> Vec<Direction> {
+        // return vec![Direction::West, Direction::East, Direction::North, Direction::South];
         match self.current_state {
             AgentState::MustTurn => {
                 match self.current_direction {
@@ -162,82 +163,54 @@ impl Agent {
     }
     
     // Technically A* but modified
-    pub fn transport_cauldron(&mut self, city: &City, starting_position: Option<Position>, goal: Option<Position>) -> HashMap<Position, (Position, Option<Direction>)> {
-        let height: isize = city.height;
-        let width: isize = city.width;
-
-        let starting_position: Position = starting_position.unwrap_or(Position{ coordinate: (0, 0) });
-        let goal_coordinates: (isize, isize) = (width - 1, height - 1);
-        let goal: Position = goal.unwrap_or(
-            Position { coordinate: goal_coordinates }
-        );
-
-        println!("Goal: {:?}", goal);
-
+    pub fn transport_cauldron(&mut self, city: &City, starting_position: Option<Position>, goal: Option<Position>) -> HashMap<Position, Position> {
+        let starting_position = starting_position.unwrap_or(Position { coordinate: (0, 0) });
+        let goal = goal.unwrap_or(Position { coordinate: (city.width - 1, city.height - 1) });
+        
         let mut frontier: BTreeSet<PrioritizedPosition> = BTreeSet::from([PrioritizedPosition(starting_position, 0)]);
-        let mut current_costs: HashMap<Position, u16> = HashMap::from([(starting_position, 0)]);
-        let mut path: HashMap<Position, (Position, Option<Direction>)> = HashMap::new();
+        let mut from_to: HashMap<Position, Position> = HashMap::new();
+        let mut cost_to: HashMap<Position, u16> = HashMap::from([(starting_position, 0)]);
 
         while !frontier.is_empty() {
-            let PrioritizedPosition ( current_tile, _ ) = frontier.pop_first().unwrap();
+            let PrioritizedPosition(current, cozt) = frontier.pop_first().unwrap();
+            self.next_state();
 
-            if current_tile.coordinate == goal.coordinate {
+            println!("cost: {cozt}");
+
+            if current.coordinate == goal.coordinate {
+                println!("found");
                 break;
             }
+            
+            let adjacents = self.get_next_adjacent(&current);
+            let valid_adjacents = adjacents.iter()
+                .filter_map(|direction| {
+                    let vector = direction.get_vector();
+                    let next_coordinate = (current.coordinate.0 + vector.0, current.coordinate.1 + vector.1);
 
-            let adjacents = self.get_next_adjacent(&current_tile);
-            let valid_adjacents = adjacents.iter().filter_map(| adjacent | {
-                let vector = adjacent.get_vector();
-                let next_coordinate = (current_tile.coordinate.0 + vector.0, current_tile.coordinate.1 + vector.1);
+                    if next_coordinate.1 >= city.height || next_coordinate.1 < 0 ||
+                    next_coordinate.0 >= city.width || next_coordinate.0 < 0 {
+                        return None;
+                    }
+                    
+                    return Some((next_coordinate, direction));
+                });
 
-                if next_coordinate.0 >= width || next_coordinate.0 < 0 ||
-                   next_coordinate.1 >= height || next_coordinate.1 < 0 {
-                    return None;
-                }
-
-                return Some((adjacent, next_coordinate));
-            });
-
-            // Find the cheapest adjacent
-            // let mut has_chosen_next = false;
-            // let mut minimum_alternative: Option<(Position, Direction, u16)> = None;
-            for (adjacent, next_coordinate) in valid_adjacents.clone() {
-                let next_position: Position = Position { coordinate: next_coordinate };
-                let next_position_weight = city.map[next_coordinate.1 as usize][next_coordinate.0 as usize];
-
-                let new_cost = current_costs.get(&current_tile).cloned().unwrap_or(0) + next_position_weight;
-
-                // if minimum_alternative.is_none() || minimum_alternative.unwrap().2 > new_cost {
-                //     minimum_alternative = Some((next_position, *adjacent, new_cost));
-                // }
-
-                if !current_costs.contains_key(&next_position) || new_cost < *current_costs.get(&next_position).unwrap() {
-                    current_costs.insert(next_position, new_cost);
-                    let priority = new_cost + next_position.manhattan_distance(&goal);
-                    frontier.insert(PrioritizedPosition(next_position, priority));
-                    path.insert(next_position, (current_tile, Some(self.current_direction)));
-
-                    self.current_direction = adjacent.clone();
-                    // has_chosen_next = true;
+            for (adjacent, direction) in valid_adjacents {
+                let position_adjacent: Position = Position { coordinate: adjacent };
+                let heat = city.map[adjacent.1 as usize][adjacent.0 as usize];
+                let new_cost = cost_to.get(&current).cloned().unwrap_or(0) + heat;
+                
+                if !cost_to.contains_key(&position_adjacent) || new_cost < *cost_to.get(&position_adjacent).unwrap() {
+                    cost_to.insert(position_adjacent, new_cost);
+                    let priority = new_cost + Position::manhattan_distance(&goal, &position_adjacent);
+                    frontier.insert(PrioritizedPosition(position_adjacent, priority));
+                    from_to.insert(position_adjacent, current);
+                    self.current_direction = *direction;
                 }
             }
-
-            // If no cheapest adjacent is found, go to the next alternative
-            // if !has_chosen_next {
-            //     if let Some((next_position, adjacent, new_cost)) = minimum_alternative {
-            //         current_costs.insert(next_position, new_cost);
-            //         let priority = new_cost + current_tile.manhattan_distance(&next_position);
-            //         frontier.insert(PrioritizedPosition(next_position, priority));
-            //         path.insert(next_position, (current_tile, Some(self.current_direction)));
-    
-            //         self.current_direction = adjacent.clone();
-            //     }
-            // }
-
-            self.next_state();
         }
-
-        path
+        from_to
     }
 }
 
@@ -247,7 +220,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use crate::{City, Agent, Position, Direction};
+    use crate::{City, Agent, Position};
 
     #[test]
     fn test_load_from_file() {
@@ -277,13 +250,13 @@ mod tests {
         println!("{} number of steps", path.len());
 
         let mut heat_loss = 0;
-        let mut current_position: Option<(Position, Option<Direction>)> = path.get(&Position { coordinate: (city.width - 1, city.height - 1) }).cloned();
+        let mut current_position: Option<Position> = path.get(&Position { coordinate: (city.width - 1, city.height - 1) }).cloned();
 
         while current_position.is_some() {
             let current_position_unwrapped = current_position.clone().unwrap();
-            let current_coordinate = current_position_unwrapped.0.coordinate;
+            let current_coordinate = current_position_unwrapped.coordinate;
             heat_loss += city.map[current_coordinate.1 as usize][current_coordinate.0 as usize];
-            current_position = path.get(&current_position_unwrapped.0).cloned();
+            current_position = path.get(&current_position_unwrapped).cloned();
         }
 
         for i in 0..city.height {
@@ -292,17 +265,8 @@ mod tests {
                     None => {
                         print!("{}", city.map[i as usize][j as usize])
                     },
-                    Some((_, direction)) => {
-                        if let Some(direction) = *direction {
-                            match direction {
-                                Direction::North => { print!("^"); },
-                                Direction::South => { print!("v"); },
-                                Direction::West => { print!("<"); },
-                                Direction::East => { print!(">"); },
-                            }
-                        } else {
-                            print!("{}", city.map[i as usize][j as usize])
-                        }
+                    Some(_) => {
+                        print!("-");
                     }
                 }
             }
