@@ -3,52 +3,19 @@
 // Rene Jotham Culaway
 //--------------------------------------------------------------------------------
 
-use std::{collections::{HashMap, BTreeSet}, vec};
+use std::{collections::{HashMap, BinaryHeap, HashSet}, vec, cmp::Reverse};
 
-const FILE_NAME: &'static str = "test_input.txt";
-
-#[derive(Debug, Hash, Clone, Copy)]
-struct PrioritizedPosition(Position, u16);
-
-impl PartialEq for PrioritizedPosition {
-    fn eq(&self, other: &Self) -> bool {
-        self.1.eq(&self.1)
-    }
-}
-
-impl Eq for PrioritizedPosition {}
-
-impl PartialOrd for PrioritizedPosition {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        return self.1.partial_cmp(&other.1);
-    }
-}
-
-impl Ord for PrioritizedPosition {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.1.cmp(&other.1)
-    }
-}
-
-#[derive(Debug, Hash, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-struct Position {
-    coordinate: (isize, isize),
-}
-
-impl Position {
-    fn manhattan_distance(&self, other: &Position) -> u16 {
-        let self_coordinate: (isize, isize) = self.coordinate;
-        let other_coordinate: (isize, isize) = other.coordinate;
-
-        self_coordinate.0.abs_diff(other_coordinate.0) as u16 + self_coordinate.1.abs_diff(other_coordinate.1) as u16
-    }
-}
+const FILE_NAME: &'static str = "input.txt";
 
 #[derive(Debug, PartialEq)]
 struct City {
     map: Vec<Vec<u16>>,
     width: isize,
     height: isize
+}
+
+fn manhattan_distance(a: (isize, isize), b: (isize, isize)) -> usize {
+    return a.0.abs_diff(b.0) + a.1.abs_diff(b.1);
 }
 
 impl City {
@@ -62,7 +29,7 @@ impl City {
                         .as_bytes()
                         .iter()
                         .cloned()
-                        .map(|character| character as u16 - 48)
+                        .map(|character| (character as char).to_digit(10).unwrap().try_into().unwrap())
                         .collect::<Vec<u16>>()
                 );
             }
@@ -73,154 +40,121 @@ impl City {
 
         City { map, width, height  }
     }
-}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Direction {
-    North,
-    South,
-    West,
-    East
-}
 
-impl Direction {
-    pub fn get_vector(&self) -> (isize, isize) {
-        match self {
-            Direction::North => {
-                (0, -1)
-            },
-            Direction::South => {
-                (0, 1)
-            },
-            Direction::West => {
-                (-1, 0)
-            },
-            Direction::East => {
-                (1, 0)
-            },
-        }
-    }
-}
+    pub fn dijkstra_2(&self, minimum_movement: Option<isize>, maximum_movement: Option<isize>) -> u16 {
+        let goal = (self.width - 1, self.height - 1);
+        let mut costs: HashMap<(isize, isize, (isize, isize), u8), u16> = HashMap::new();
+        let mut frontier: BinaryHeap<(Reverse<u16>, (isize, isize, (isize, isize), u8))> = BinaryHeap::from([(Reverse(0), (0, 0, (0, 0), 0))]);
 
-enum AgentState {
-    MustTurn,
-    FirstMovement,
-    SecondMovement,
-    ThirdMovement
-}
+        while let Some((Reverse(cost), (current_x, current_y, previous_dir, num_of_steps_in_same_direction))) = frontier.pop() {
+            if (current_x, current_y) == goal {
+                println!("found!");
+                return cost;
+            }
 
-struct Agent {
-    current_state: AgentState,
-    current_direction: Direction
-}
+            for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
 
-impl Agent {
-    pub fn new() -> Self {
-        Agent { current_state: AgentState::MustTurn, current_direction: Direction::North }
-    }
-
-    fn next_state(&mut self) {
-        match self.current_state {
-            AgentState::MustTurn => {
-                self.current_state = AgentState::FirstMovement;
-            },
-            AgentState::FirstMovement => {
-                self.current_state = AgentState::SecondMovement;
-            },
-            AgentState::SecondMovement => {
-                self.current_state = AgentState::ThirdMovement;
-            },
-            AgentState::ThirdMovement => {
-                self.current_state = AgentState::MustTurn;
-            },
-        }
-    }
-
-    pub fn get_next_adjacent(&self, position: &Position) -> Vec<Direction> {
-        // return vec![Direction::West, Direction::East, Direction::North, Direction::South];
-        match self.current_state {
-            AgentState::MustTurn => {
-                match self.current_direction {
-                    Direction::North | Direction::South => {
-                        vec![Direction::West, Direction::East]
-                    },
-                    Direction::West | Direction::East => {
-                        vec![Direction::North, Direction::South]
-                    },
+                if (-previous_dir.0, -previous_dir.1) == (dx, dy) {
+                    continue;
                 }
-            },
-            _ => {
-                match self.current_direction {
-                    Direction::North | Direction::South => {
-                        vec![self.current_direction, Direction::West, Direction::East]
-                    },
-                    Direction::West | Direction::East => {
-                        vec![self.current_direction, Direction::North, Direction::South]
-                    },
+
+                if num_of_steps_in_same_direction >= maximum_movement.unwrap_or(0).try_into().unwrap_or(0) {
+                    continue;
+                }
+
+                let mut next_num_of_steps_in_the_same_direction = 0;
+                if previous_dir == (dx, dy) {
+                    next_num_of_steps_in_the_same_direction = num_of_steps_in_same_direction + 1  
+                }
+                let next = (current_x + dx, current_y + dy, (dx, dy), next_num_of_steps_in_the_same_direction);
+                let (next_x, next_y, (_, _), _) = next;
+
+                if next_x >= self.width || next_y >= self.height || next_x < 0 || next_y < 0 {
+                    continue;
+                }
+
+                let new_cost = cost + self.map[next_y as usize][next_x as usize];
+                if !costs.contains_key(&next) || new_cost < *costs.get(&next).unwrap() {
+
+                    if num_of_steps_in_same_direction < minimum_movement.unwrap_or(0).try_into().unwrap_or(0) {
+                        continue;
+                    }
+                    costs.insert(next, new_cost);
+                    let priority = Reverse(new_cost);
+                    let key = (priority, next);
+                    frontier.push(key);
                 }
             }
         }
+        unreachable!()
     }
-    
-    // Technically A* but modified
-    pub fn transport_cauldron(&mut self, city: &City, starting_position: Option<Position>, goal: Option<Position>) -> HashMap<Position, Position> {
-        let starting_position = starting_position.unwrap_or(Position { coordinate: (0, 0) });
-        let goal = goal.unwrap_or(Position { coordinate: (city.width - 1, city.height - 1) });
-        
-        let mut frontier: BTreeSet<PrioritizedPosition> = BTreeSet::from([PrioritizedPosition(starting_position, 0)]);
-        let mut from_to: HashMap<Position, Position> = HashMap::new();
-        let mut cost_to: HashMap<Position, u16> = HashMap::from([(starting_position, 0)]);
 
-        while !frontier.is_empty() {
-            let PrioritizedPosition(current, cozt) = frontier.pop_first().unwrap();
-            self.next_state();
+    // Used Axel Lindeberg's solution because my Dijkstra implementation wouldn't work
+    // https://github.com/AxlLind/AdventOfCode2023/blob/main/src/bin/17.rs
 
-            println!("cost: {cozt}");
+    pub fn dijkstra(&self, minimum_movement: Option<isize>, maximum_movement: Option<isize>) -> u16 {
+        let goal = (self.width - 1, self.height - 1);
 
-            if current.coordinate == goal.coordinate {
-                println!("found");
-                break;
+        let mut costs: HashMap<(isize, isize, (isize, isize)), u16> = HashMap::new();
+        let mut frontier: BinaryHeap<(Reverse<u16>, (isize, isize, (isize, isize)))> = BinaryHeap::from([(Reverse(0), (0, 0, (0, 0)))]);
+
+        while let Some((Reverse(current_cost), (current_x, current_y, (current_dx, current_dy)))) = frontier.pop() {
+            if (current_x, current_y) == goal {
+                return current_cost;
             }
-            
-            let adjacents = self.get_next_adjacent(&current);
-            let valid_adjacents = adjacents.iter()
-                .filter_map(|direction| {
-                    let vector = direction.get_vector();
-                    let next_coordinate = (current.coordinate.0 + vector.0, current.coordinate.1 + vector.1);
 
-                    if next_coordinate.1 >= city.height || next_coordinate.1 < 0 ||
-                    next_coordinate.0 >= city.width || next_coordinate.0 < 0 {
-                        return None;
+            if costs.get(&(current_x, current_y, (current_dx, current_dy))).is_some_and(|&stored_cost| stored_cost < current_cost) {
+                continue;
+            }
+
+            for (dx, dy) in [(0, 1), (0, -1), (1, 0), (-1, 0)] {
+                if (dx, dy) == (current_dx, current_dy) || (-dx, -dy) == (current_dx, current_dy) {
+                    continue;
+                }
+
+                let mut next_cost = current_cost;
+
+                for skip in 1..=maximum_movement.unwrap_or(3) {
+                    let next_x = current_x + (dx * skip);
+                    let next_y = current_y + (dy * skip);
+
+                    if next_x >= self.width || next_x < 0 || next_y >= self.height || next_y < 0 {
+                        continue;
+                    }
+
+                    next_cost += self.map[next_y as usize][next_x as usize];
+
+                    if skip < minimum_movement.unwrap_or(1) {
+                        continue;
                     }
                     
-                    return Some((next_coordinate, direction));
-                });
-
-            for (adjacent, direction) in valid_adjacents {
-                let position_adjacent: Position = Position { coordinate: adjacent };
-                let heat = city.map[adjacent.1 as usize][adjacent.0 as usize];
-                let new_cost = cost_to.get(&current).cloned().unwrap_or(0) + heat;
-                
-                if !cost_to.contains_key(&position_adjacent) || new_cost < *cost_to.get(&position_adjacent).unwrap() {
-                    cost_to.insert(position_adjacent, new_cost);
-                    let priority = new_cost + Position::manhattan_distance(&goal, &position_adjacent);
-                    frontier.insert(PrioritizedPosition(position_adjacent, priority));
-                    from_to.insert(position_adjacent, current);
-                    self.current_direction = *direction;
+                    let next = (next_x, next_y, (dx, dy));
+                    if !costs.contains_key(&next) || next_cost < *costs.get(&next).unwrap() {
+                        costs.insert(next, next_cost);
+                        frontier.push((Reverse(next_cost), next));
+                    }
                 }
             }
         }
-        from_to
+        unreachable!()
     }
 }
+
 
 fn main() {
     println!("Hello, world!");
+    let city = City::load_from_file(FILE_NAME);
+    println!("min heat loss: {:?}", city.dijkstra(None, None));
+    println!("min heat loss: {:?}", city.dijkstra(Some(4), Some(10)));
+    println!("min heat loss: {:?}", city.dijkstra_2(None, None));
+    println!("min heat loss: {:?}", city.dijkstra_2(Some(4), Some(10)));
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{City, Agent, Position};
+
+    use crate::City;
 
     #[test]
     fn test_load_from_file() {
@@ -245,34 +179,35 @@ mod tests {
     #[test]
     fn test_transport_cauldron() {
         let city: City = City::load_from_file("test_input.txt");
-        let mut agent: Agent = Agent::new();
-        let path = agent.transport_cauldron(&city, None, None);
-        println!("{} number of steps", path.len());
+        let min_heat = city.dijkstra(None, None);
+        // let mut valid_path: HashSet<(isize, isize)> = HashSet::new();
+        // assert!(path.contains_key(&(city.width - 1, city.height - 1)));
 
-        let mut heat_loss = 0;
-        let mut current_position: Option<Position> = path.get(&Position { coordinate: (city.width - 1, city.height - 1) }).cloned();
+        // let mut heat_loss = 0;
+        // let mut current_position: Option<(isize, isize)> = path.get(&(city.width - 1, city.height - 1)).cloned();
 
-        while current_position.is_some() {
-            let current_position_unwrapped = current_position.clone().unwrap();
-            let current_coordinate = current_position_unwrapped.coordinate;
-            heat_loss += city.map[current_coordinate.1 as usize][current_coordinate.0 as usize];
-            current_position = path.get(&current_position_unwrapped).cloned();
-        }
+        // while current_position.is_some_and(|pos| pos != (0, 0)) {
+        //     valid_path.insert(current_position.unwrap());
+        //     let current_position_unwrapped = current_position.clone().unwrap();
+        //     let current_coordinate = current_position_unwrapped;
+        //     heat_loss += city.map[current_coordinate.1 as usize][current_coordinate.0 as usize];
+        //     current_position = path.get(&current_position_unwrapped).cloned();
+        // }
 
-        for i in 0..city.height {
-            for j in 0..city.width {
-                match path.get(&(Position {coordinate: (j, i)})) {
-                    None => {
-                        print!("{}", city.map[i as usize][j as usize])
-                    },
-                    Some(_) => {
-                        print!("-");
-                    }
-                }
-            }
-            println!();
-        }
+        // for i in 0..city.height {
+        //     for j in 0..city.width {
+        //         match valid_path.get(&(j, i)) {
+        //             None => {
+        //                 print!("{}", city.map[i as usize][j as usize])
+        //             },
+        //             Some(_) => {
+        //                 print!("-");
+        //             }
+        //         }
+        //     }
+        //     println!();
+        // }
 
-        assert_eq!(heat_loss, 102);
+        assert_eq!(min_heat, 102)
     }
 }
