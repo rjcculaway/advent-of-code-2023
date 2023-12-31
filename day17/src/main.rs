@@ -3,7 +3,7 @@
 // Rene Jotham Culaway
 //--------------------------------------------------------------------------------
 
-use std::{collections::{HashMap, BinaryHeap, HashSet}, vec, cmp::Reverse};
+use std::{collections::{HashMap, BinaryHeap}, vec, cmp::Reverse};
 
 const FILE_NAME: &'static str = "input.txt";
 
@@ -14,9 +14,9 @@ struct City {
     height: isize
 }
 
-fn manhattan_distance(a: (isize, isize), b: (isize, isize)) -> usize {
-    return a.0.abs_diff(b.0) + a.1.abs_diff(b.1);
-}
+// fn manhattan_distance(a: (isize, isize), b: (isize, isize)) -> usize {
+//     return a.0.abs_diff(b.0) + a.1.abs_diff(b.1);
+// }
 
 impl City {
     pub fn load_from_file(file_name: &str) -> City {
